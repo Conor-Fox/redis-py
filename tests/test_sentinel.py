@@ -34,7 +34,6 @@ class SentinelTestCluster(object):
             'port': port,
             'is_master': True,
             'is_sdown': False,
-            'is_sdown': False,
             'is_odown': False,
             'num-other-sentinels': 0,
         }
@@ -51,7 +50,7 @@ class SentinelTestCluster(object):
         if node.id in self.nodes_timeout:
             raise exceptions.TimeoutError
 
-    def client(self, host, port, **kwargs):
+    def client(self, host, port, **kwargs): 
         return SentinelTestClient(self, (host, port))
 
 
