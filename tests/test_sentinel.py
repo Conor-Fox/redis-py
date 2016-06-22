@@ -34,9 +34,31 @@ class SentinelTestCluster(object):
             'port': port,
             'is_master': True,
             'is_sdown': False,
+            'is_sdown': False,
             'is_odown': False,
             'num-other-sentinels': 0,
         }
+        self.service_name = service_name
+        self.slaves = []
+        self.nodes_down = set()
+        self.nodes_timeout = set()
+
+    def connection_error_if_down(self, node):
+        if node.id in self.nodes_down:
+            raise exceptions.ConnectionError
+
+    def timeout_if_down(self, node):
+        if node.id in self.nodes_timeout:
+            raise exceptions.TimeoutError
+
+    def client(self, host, port, **kwargs):
+        return SentinelTestClient(self, (host, port))
+
+
+class EmptySentinelTestCluster(object):
+    def __init__(self, service_name='mymaster'):
+        self.clients = {}
+        self.master = {}
         self.service_name = service_name
         self.slaves = []
         self.nodes_down = set()
@@ -64,21 +86,40 @@ def cluster(request):
     request.addfinalizer(teardown)
     return cluster
 
+@pytest.fixture()
+def empty_cluster(request):
+    def teardown():
+        redis.sentinel.StrictRedis = saved_StrictRedis
+    empty_cluster = EmptySentinelTestCluster()
+    saved_StrictRedis = redis.sentinel.StrictRedis
+    redis.sentinel.StrictRedis = empty_cluster.client
+    request.addfinalizer(teardown)
+    return empty_cluster
+
 
 @pytest.fixture()
 def sentinel(request, cluster):
     return Sentinel([('foo', 26379), ('bar', 26379)])
 
+@pytest.fixture()
+def sentinel_no_clients(request, empty_cluster):
+    return Sentinel([('foo', 26379), ('bar', 26379)])
 
 def test_discover_master(sentinel):
     address = sentinel.discover_master('mymaster')
     assert address == ('127.0.0.1', 6379)
 
+def test_discover_masters(sentinel):
+    address = sentinel.discover_masters()
+    assert address == {'mymaster': {'ip': '127.0.0.1','is_master': True,'is_sdown': False,'is_odown': False,'num-other-sentinels': 0,'port': 6379}}
+
+def test_discover_masters_error(sentinel_no_clients):
+    masters = sentinel_no_clients.discover_masters()
+    assert masters == {'mymaster':{}}
 
 def test_discover_master_error(sentinel):
     with pytest.raises(MasterNotFoundError):
         sentinel.discover_master('xxx')
-
 
 def test_discover_master_sentinel_down(cluster, sentinel):
     # Put first sentinel 'foo' down

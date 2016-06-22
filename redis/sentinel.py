@@ -221,6 +221,19 @@ class Sentinel(object):
                     sentinel, self.sentinels[0])
                 return state['ip'], state['port']
         raise MasterNotFoundError("No master found for %r" % (service_name,))
+	
+	def discover_masters(self):
+            """
+        Asks sentinel servers for the Redis master's list.
+
+        Returns a dict object of masters and details of said masters or an empty dict
+        """
+        for sentinel_no, sentinel in enumerate(self.sentinels):
+            try:
+                masters = sentinel.sentinel_masters()
+            except (ConnectionError, TimeoutError):
+                continue
+        return masters
 
     def filter_slaves(self, slaves):
         "Remove slaves that are in an ODOWN or SDOWN state"
